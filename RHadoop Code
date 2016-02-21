@@ -1,0 +1,136 @@
+/**  RHadoop Code  **/
+
+# install.packages("/home/edureka/Downloads/RHive_2.0-0.2.tar.gz", repos = NULL, type = "source") 
+library(RHive) 
+rhive.init() 
+rhive.env() 
+Sys.setenv(HADOOP_HOME="/usr/lib/hadoop-2.2.0") 
+Sys.setenv(HADOOP_STREAMING="/usr/lib/hadoop-2.2.0/share/hadoop/tools/lib/hadoop-streaming-2.2.0.jar") 
+Sys.setenv(HIVE_HOME="/usr/lib/hive-0.13.1-bin") 
+Sys.setenv(HADOOP_CMD="/usr/lib/hadoop-2.2.0/bin/hadoop") 
+Sys.setenv(RHIVE_FS_HOME="/home/edureka/Downloads/RHive") 
+rhive.init() 
+rhive.env() 
+rhive.connect(host="192.168.56.102",user="edureka", defaultFS="hdfs://localhost:8020") 
+rhive.query("show databases") 
+rhive.query("use airlines") 
+rhive.query("show tables") 
+library(rmr2) 
+library(plyr)  
+# Sys.setenv(HADOOP_HOME='/usr/lib/hadoop-mapreduce') 
+# Sys.setenv(HADOOP_CMD='/usr/bin/hadoop') 
+# Sys.setenv(HADOOP_STREAMING='/usr/lib/hadoop-mapreduce/hadoop-streaming-2.0.0-cdh4.7.0.jar')  
+Sys.setenv(HADOOP_CMD="/usr/lib/hadoop-2.2.0/bin/hadoop") 
+Sys.setenv(HADOOP_STREAMING="/usr/lib/hadoop-2.2.0/share/hadoop/tools/lib/hadoop-streaming-2.2.0.jar") 
+ 
+# hdfs.data.root = '/user/username' 
+# hdfs.data = file.path(hdfs.data.root, 'datasample')  
+hdfs.data.root = '/data' 
+hdfs.data = file.path(hdfs.data.root, 'new_2008.csv')  
+# writes output to 'airline' directory in user's HDFS home (e.g., /user/username/airline<iteration>/) 
+hdfs.out.root = 'airlineout7'  
+hdfs.out = file.path(hdfs.out.root, 'out')  
+# part of this code and style of map reduce is taken from Jeffrey Breen (one of the contributors of rmr2 package)  
+# asa.csv.input.format() - read CSV data files and label field names 
+# for better code readability (especially in the mapper) 
+# 
+asa.csv.input.format = make.input.format(format='csv', mode='text', streaming.format = NULL, sep=',', 
+                                         col.names = c('Year', 'Month', 'DayofMonth', 'DayOfWeek', 
+                                                       'DepTime', 'CRSDepTime', 'ArrTime', 'CRSArrTime', 
+                                                       'UniqueCarrier', 'FlightNum', 'TailNum', 
+                                                       'ActualElapsedTime', 'CRSElapsedTime', 'AirTime', 
+                                                       'ArrDelay', 'DepDelay', 'Origin', 'Dest', 'Distance', 
+                                                       'TaxiIn', 'TaxiOut', 'Cancelled', 'CancellationCode', 
+                                                       'Diverted', 'CarrierDelay', 'WeatherDelay', 
+                                                       'NASDelay', 'SecurityDelay', 'LateAircraftDelay'), 
+                                         stringsAsFactors=F)  
+# 
+# the mapper gets keys and values from the input formatter 
+# in our case, the key is NULL and the value is a data.frame from read.table() 
+# 
+mapper.year.market.enroute_time = function(key, val.df) { 
+   
+  # Remove header lines, cancellations, and diversions: 
+  val.df = subset(val.df, Year != 'Year' & Cancelled == 0 & Diverted == 0) 
+   
+  # We don't care about direction of travel, so construct a new 'AirlineRoute' vector 
+  # with airports ordered alphabetically (e.g, SAN to SFO becomes 'SAN-SFO') 
+  AirlineRoute = with( val.df, ifelse(Origin < Dest,  
+                                      paste(Origin, Dest, sep='-'), 
+                                      paste(Dest, Origin, sep='-')) ) 
+   
+  # key consists of year, market 
+  output.key = data.frame(year=as.numeric(val.df$Year), AirlineRoute=AirlineRoute, stringsAsFactors=F) 
+   
+  # emit data.frame of gate-to-gate elapsed times (CRS and actual) + time in air 
+  output.val = val.df[,c('CRSElapsedTime', 'ActualElapsedTime', 'AirTime')] 
+  colnames(output.val) = c('scheduled', 'actual', 'inflight') 
+   
+  # and finally, make sure they're numeric while we're at it 
+  output.val = transform(output.val,  
+                         scheduled = as.numeric(scheduled), 
+                         actual = as.numeric(actual), 
+                         inflight = as.numeric(inflight) 
+  ) 
+   
+  return( keyval(output.key, output.val) ) # {BOM-DEL, {120, 125, 100}},{BOM-BLR, {110, 115, 90}} 
+} 
+# 
+# the reducer gets all the values for a given key 
+# the values (which may be multi-valued as here) come in the form of a data.frame 
+# 
+reducer.year.market.enroute_time = function(key, val.df) { 
+  #{BOM-DEL, {120, 125, 100}} {110, 115, 90}} 
+  output.key = key  
+  output.val = data.frame(flights = nrow(val.df),  
+                          scheduled = mean(val.df$scheduled, na.rm=T),  
+                          actual = mean(val.df$actual, na.rm=T),  
+                          inflight = mean(val.df$inflight, na.rm=T) ) 
+   
+  return( keyval(output.key, output.val) ) 
+}  
+mr.year.market.enroute_time = function (input, output) { 
+  mapreduce(input = input, 
+            output = output, 
+            # output = "data/flightoutput1", 
+            input.format = asa.csv.input.format, 
+            map = mapper.year.market.enroute_time, 
+            reduce = reducer.year.market.enroute_time, 
+            verbose=T) 
+}  
+out = mr.year.market.enroute_time(hdfs.data, hdfs.out)  
+results = from.dfs( out ) 
+results.df = as.data.frame(results, stringsAsFactors=F ) 
+colnames(results.df) = c('year', 'AirlineRoute', 'flights', 'scheduled', 'actual', 'inflight')  
+# print((results.df))  
+rhive.write.table(results.df, tableName = 'RouteMeanTime', sep=',')   
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 
+   
+/**    R Code for Decision Tree  **/
+
+DF <- hdfs.data 
+Data <- DF[, c("UniqueCarrier", "DepDelay", "AirTime", "Distance", "ArrDelay")] 
+Data <- Data[complete.cases(Data),] 
+dim(Data) 
+filteredData <- sample(1:dim(Data)[1], size=as.integer(dim(Data[1])/3),replace = F) 
+filteredData  
+# creating trainData & testData 
+trainData <- Data[-filteredData,] 
+#View(trainData) 
+testData <- Data[filteredData,] 
+#View(testData) 
+library(tree)  
+myTree <- tree(ArrDelay ~ DepDelay + AirTime + Distance 
+               , data=trainData) # model 
+plot(myTree) 
+text(myTree , pretty = 0)  
+testData$predictedarrivaldelay <- predict(myTree, newdata = testData)  
+rhive.write.table(testData, tableName = 'predictedarrivaldelay', sep=',')  
+ 
+rhive.query("show tables")  
+rhive.query("Select * from predictedarrivaldelay limit 10") 
+#View(testData)   
+library(hydroGOF) 
+rmse(testData$predictedarrivaldelay, testData$ArrDelay) 
