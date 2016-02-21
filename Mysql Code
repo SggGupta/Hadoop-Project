@@ -1,0 +1,120 @@
+Mysql Code /* flight_database_mysql.SQL  for Mysql DataBase                         */ 
+/* Please input file path as per your local file path */
+
+sudo service mysqld restart 
+mysql -u root 
+
+/* Create a database called FlightData             */ 
+
+CREATE DATABASE FlightData; 
+USE FlightData; 
+
+/*Create tables for the FlightData database         */ 
+
+CREATE TABLE flight_data( 
+   year INT, 
+   month  INT, 
+   day  INT, 
+   day_of_week  INT, 
+   dep_time  INT, 
+   crs_dep_time  INT, 
+   arr_time  INT, 
+   crs_arr_time  INT, 
+   unique_carrier  VARCHAR(10), 
+   flight_num   INT, 
+   tail_num  VARCHAR(40), 
+   actual_elapsed_time  INT, 
+   crs_elapsed_time  INT, 
+   air_time INT, 
+   arr_delay  INT, 
+   dep_delay INT, 
+   origin  VARCHAR(10), 
+   dest  VARCHAR(10), 
+   distance  INT, 
+   taxi_in  INT, 
+   taxi_out  INT, 
+   cancelled  INT, 
+   cancellation_code  VARCHAR(10), 
+   diverted   INT, 
+   carrier_delay   VARCHAR(10), 
+   weather_delay  VARCHAR(10), 
+   nas_delay  VARCHAR(10), 
+   security_delay  VARCHAR(10), 
+   late_aircraft_delay VARCHAR(10) 
+); 
+ 
+ LOAD DATA LOCAL INFILE '/home/sapna/Downloads/new_2008.csv' INTO TABLE flight_data fields terminated BY ',' enclosed BY '"' lines terminated BY '\n'; 
+  
+ Create table Airline_Routes 
+(Airline  VARCHAR(4), 
+Airline_ID  VARCHAR(4), 
+Source_airport  VARCHAR(4), 
+Source_airport_ID  VARCHAR(4), 
+Destination_airport  VARCHAR(4),   
+Destination_airport_ID VARCHAR(4), 
+Codeshare  VARCHAR(4),   
+Stops  int, 
+Equipment  VARCHAR(4));
+
+ LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/routes.dat' INTO TABLE Airline_Routes fields terminated BY ',' enclosed BY '"' lines terminated BY '\n';  
+
+Create Table Airlines 
+( 
+Airline_ID  VARCHAR(4), 
+Name  VARCHAR(50), 
+Alias  VARCHAR(4), 
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Callsign VARCHAR(50),  
+Country VARCHAR(50),   
+Active  VARCHAR(2)); 
+
+LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/Final_airlines' INTO TABLE Airlines fields terminated BY ',' enclosed BY '"' lines terminated BY '\n';  
+
+Create table Airports 
+(Airport_ID  VARCHAR(4),   
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50),   
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Latitude  float, 
+Longitude  float,  
+Altitude  int,  
+Timezone  float,  
+DST  VARCHAR(4),  
+Tz VARCHAR(50)); 
+
+LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/airports_mod.dat' INTO TABLE Airports fields terminated BY ',' enclosed BY '"' lines terminated BY '\n'; 
+
+/* Query for exploratory analysis to find active carriers */ 
+create table Airline_Routes_Active 
+as  
+select *  
+from Airline_Routes ar 
+where exists ( select 1 from Airlines  
+               where airline_id = ar.airline_id and active ='Y');  -- 66251        
+/* Following queries were bottle neck due to large number of records in Flight_Data table */  
+/* so data was sqooped from Mysql to HDFS for further analysis */       
+select count(1)  
+from flight_data fd 
+where exists ( select 1 from Airline_Routes_Active  
+               where  source_airport = fd.origin) 
+and    exists ( select 1 from Airline_Routes_Active 
+                where    destination_airport = fd.dest) 
+and exists ( select 1 from Airline_Routes_Active 
+                where    airline = fd.unique_carrier);     
+     
+select  * 
+ from flight_data fd 
+where exists ( select 1 from Airline_Routes_Active 
+                where    airline = fd.unique_carrier);      
+select fd.*  
+from flight_data fd, Airline_Routes ar , Airlines al  
+where fd.origin = ar.source_airport  
+and fd.dest = ar.destination_airport  
+and fd.unique_carrier = ar.airline  
+and ar.airline_id = al.airline_id  
+and al.active ='Y';  
+
+
