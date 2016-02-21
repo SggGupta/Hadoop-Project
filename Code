@@ -1,0 +1,427 @@
+Mysql Code /* flight_database_mysql.SQL  for Mysql DataBase                         */ 
+
+sudo service mysqld restart 
+mysql -u root 
+
+/* Create a database called FlightData             */ 
+
+CREATE DATABASE FlightData; 
+USE FlightData; 
+
+/*Create tables for the FlightData database         */ 
+
+CREATE TABLE flight_data( 
+   year INT, 
+   month  INT, 
+   day  INT, 
+   day_of_week  INT, 
+   dep_time  INT, 
+   crs_dep_time  INT, 
+   arr_time  INT, 
+   crs_arr_time  INT, 
+   unique_carrier  VARCHAR(10), 
+   flight_num   INT, 
+   tail_num  VARCHAR(40), 
+   actual_elapsed_time  INT, 
+   crs_elapsed_time  INT, 
+   air_time INT, 
+   arr_delay  INT, 
+   dep_delay INT, 
+   origin  VARCHAR(10), 
+   dest  VARCHAR(10), 
+   distance  INT, 
+   taxi_in  INT, 
+   taxi_out  INT, 
+   cancelled  INT, 
+   cancellation_code  VARCHAR(10), 
+   diverted   INT, 
+   carrier_delay   VARCHAR(10), 
+   weather_delay  VARCHAR(10), 
+   nas_delay  VARCHAR(10), 
+   security_delay  VARCHAR(10), 
+   late_aircraft_delay VARCHAR(10) 
+); 
+ 
+ LOAD DATA LOCAL INFILE '/home/sapna/Downloads/new_2008.csv' INTO TABLE flight_data fields terminated BY ',' enclosed BY '"' lines terminated BY '\n'; 
+  
+ Create table Airline_Routes 
+(Airline  VARCHAR(4), 
+Airline_ID  VARCHAR(4), 
+Source_airport  VARCHAR(4), 
+Source_airport_ID  VARCHAR(4), 
+Destination_airport  VARCHAR(4),   
+Destination_airport_ID VARCHAR(4), 
+Codeshare  VARCHAR(4),   
+Stops  int, 
+Equipment  VARCHAR(4));
+
+ LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/routes.dat' INTO TABLE Airline_Routes fields terminated BY ',' enclosed BY '"' lines terminated BY '\n';  
+
+Create Table Airlines 
+( 
+Airline_ID  VARCHAR(4), 
+Name  VARCHAR(50), 
+Alias  VARCHAR(4), 
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Callsign VARCHAR(50),  
+Country VARCHAR(50),   
+Active  VARCHAR(2)); 
+
+LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/Final_airlines' INTO TABLE Airlines fields terminated BY ',' enclosed BY '"' lines terminated BY '\n';  
+
+Create table Airports 
+(Airport_ID  VARCHAR(4),   
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50),   
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Latitude  float, 
+Longitude  float,  
+Altitude  int,  
+Timezone  float,  
+DST  VARCHAR(4),  
+Tz VARCHAR(50)); 
+
+LOAD DATA LOCAL INFILE '/home/sapna/Downloads/data/airports_mod.dat' INTO TABLE Airports fields terminated BY ',' enclosed BY '"' lines terminated BY '\n'; 
+
+/* Query for exploratory analysis to find active carriers */ 
+create table Airline_Routes_Active 
+as  
+select *  
+from Airline_Routes ar 
+where exists ( select 1 from Airlines  
+               where airline_id = ar.airline_id and active ='Y');  -- 66251        
+/* Following queries were bottle neck due to large number of records in Flight_Data table */  
+/* so data was sqooped from Mysql to HDFS for further analysis */       
+select count(1)  
+from flight_data fd 
+where exists ( select 1 from Airline_Routes_Active  
+               where  source_airport = fd.origin) 
+and    exists ( select 1 from Airline_Routes_Active 
+                where    destination_airport = fd.dest) 
+and exists ( select 1 from Airline_Routes_Active 
+                where    airline = fd.unique_carrier);     
+     
+select  * 
+ from flight_data fd 
+where exists ( select 1 from Airline_Routes_Active 
+                where    airline = fd.unique_carrier);      
+select fd.*  
+from flight_data fd, Airline_Routes ar , Airlines al  
+where fd.origin = ar.source_airport  
+and fd.dest = ar.destination_airport  
+and fd.unique_carrier = ar.airline  
+and ar.airline_id = al.airline_id  
+and al.active ='Y';  
+
+HIVE CODE /* flight_hive_database.SQL for HIVE Database */ 
+
+/* Create a database called FlightData             */ 
+CREATE DATABASE Airlines; 
+USE Airlines; 
+/*Create tables for the FlightData database         */ 
+CREATE TABLE flight_data( 
+   year INT, 
+   month  INT, 
+   day_of_month  INT, 
+   day_of_week  INT, 
+   dep_time  INT, 
+   crs_dep_time  INT, 
+   arr_time  INT, 
+   crs_arr_time  INT, 
+   unique_carrier  VARCHAR(10), 
+   flight_num   INT, 
+   tail_num  VARCHAR(40), 
+   actual_elapsed_time  INT, 
+   crs_elapsed_time  INT, 
+   air_time INT, 
+   arr_delay  INT, 
+   dep_delay INT, 
+   origin  VARCHAR(10), 
+   dest  VARCHAR(10), 
+   distance  INT, 
+   taxi_in  INT, 
+   taxi_out  INT, 
+   cancelled  INT, 
+   cancellation_code  VARCHAR(10), 
+   diverted   INT, 
+   carrier_delay   VARCHAR(10), 
+   weather_delay  VARCHAR(10), 
+   nas_delay  VARCHAR(10), 
+   security_delay  VARCHAR(10), 
+   late_aircraft_delay VARCHAR(10) 
+) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/flight_data/part-r-00000' into table flight_data; 
+Create table Airline_Routes 
+(Airline  VARCHAR(4), 
+Airline_ID  VARCHAR(4), 
+Source_airport  VARCHAR(4), 
+Source_airport_ID  VARCHAR(4), 
+Destination_airport  VARCHAR(4),   
+Destination_airport_ID VARCHAR(4), 
+Codeshare  VARCHAR(4),   
+Stops  int, 
+Equipment  VARCHAR(4)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airline_routes/part-r-00000' into table Airline_Routes;  
+Create Table Airlines 
+( 
+Airline_ID  VARCHAR(4), 
+Name  VARCHAR(50), 
+Alias  VARCHAR(4), 
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Callsign VARCHAR(50),  
+Country VARCHAR(50),   
+Active  VARCHAR(2)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airlines/part-r-00000' into table Airlines;  
+Create table Airports 
+(Airport_ID  VARCHAR(4),   
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50),   
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Latitude  float, 
+Longitude  float,  
+Altitude  int,  
+Timezone  float,  
+DST  VARCHAR(4),  
+Tz VARCHAR(50)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airports/part-r-00000' into table Airports; 
+   
+  /* ++++++++++++++++Table to store MapReduce Results++++++++++++++++    */  
+CREATE EXTERNAL TABLE Active_Airlines_US(  
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50),  
+Number_Routes_covered int 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/activeAirlinesFinder_ids/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/activeAirlinesFinder_id/part-r-00000' into table Active_Airlines_US;  
+select * from Active_Airlines_US;  
+CREATE EXTERNAL TABLE ActiveWithShareCode( 
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/airlinesWithSharedCodeFinder_ids/'; 
+LOAD DATA INPATH '/user/sapna/airlineApp/airlinesWithSharedCodeFinder_ids/part-r-00000' into table ActiveWithShareCode; 
+select * from ActiveWithShareCode;  
+CREATE EXTERNAL TABLE ZeroStopAirlines( 
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','LOCATION '/user/sapna/airlineApp/zeroStopAirlinesFinder_iddd/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/zeroStopAirlinesFinder_iddd/part-r-00000' into table ZeroStopAirlines; 
+select * from ZeroStopAirlines;  
+CREATE EXTERNAL TABLE AirPortByCountry( 
+Airport_ID_ITATA VARCHAR(50), 
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/findAirportByCountry_ids/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/findAirportByCountry_ids//part-r-00000' into table AirPortByCountry;  
+select * from AirPortByCountry;  
+/* ++++++++++++++++++++++++++++Create Table to Store PIG Results +++++++++++++++++*/  
+Drop Table delaybymonth; 
+CREATE EXTERNAL TABLE delaybymonth( 
+monthday varchar(20),  
+totalflights int , 
+totaldelayedflights int , 
+percdelayed float  
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' 
+LOCATION '/data/DelayByMonthDay/';  
+LOAD DATA INPATH '/data/DelayByMonthDay/part-r-00000' into table delaybymonth; 
+select * from delaybymonth; 
+Drop Table delaybycarrier;  
+CREATE EXTERNAL TABLE delaybycarrier( 
+monthday varchar(20),  
+totalflights int , 
+totaldelayedflights int , 
+percdelayed float  
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' 
+LOCATION '/data/DelayByCarrie/';  
+LOAD DATA INPATH '/data/DelayByCarrie/part-r-00000' into table delaybycarrier; 
+select * from DelayByCarrier; 
+RHadoop Code # install.packages("/home/edureka/Downloads/RHive_2.0-0.2.tar.gz", repos = NULL, type = "source") 
+library(RHive) 
+rhive.init() 
+rhive.env() 
+Sys.setenv(HADOOP_HOME="/usr/lib/hadoop-2.2.0") 
+Sys.setenv(HADOOP_STREAMING="/usr/lib/hadoop-2.2.0/share/hadoop/tools/lib/hadoop-streaming-2.2.0.jar") 
+Sys.setenv(HIVE_HOME="/usr/lib/hive-0.13.1-bin") 
+Sys.setenv(HADOOP_CMD="/usr/lib/hadoop-2.2.0/bin/hadoop") 
+Sys.setenv(RHIVE_FS_HOME="/home/edureka/Downloads/RHive") 
+rhive.init() 
+rhive.env() 
+rhive.connect(host="192.168.56.102",user="edureka", defaultFS="hdfs://localhost:8020") 
+rhive.query("show databases") 
+rhive.query("use airlines") 
+rhive.query("show tables") 
+library(rmr2) 
+library(plyr)  
+# Sys.setenv(HADOOP_HOME='/usr/lib/hadoop-mapreduce') 
+# Sys.setenv(HADOOP_CMD='/usr/bin/hadoop') 
+# Sys.setenv(HADOOP_STREAMING='/usr/lib/hadoop-mapreduce/hadoop-streaming-2.0.0-cdh4.7.0.jar')  
+Sys.setenv(HADOOP_CMD="/usr/lib/hadoop-2.2.0/bin/hadoop") 
+Sys.setenv(HADOOP_STREAMING="/usr/lib/hadoop-2.2.0/share/hadoop/tools/lib/hadoop-streaming-2.2.0.jar") 
+ 
+# hdfs.data.root = '/user/username' 
+# hdfs.data = file.path(hdfs.data.root, 'datasample')  
+hdfs.data.root = '/data' 
+hdfs.data = file.path(hdfs.data.root, 'new_2008.csv')  
+# writes output to 'airline' directory in user's HDFS home (e.g., /user/username/airline<iteration>/) 
+hdfs.out.root = 'airlineout7'  
+hdfs.out = file.path(hdfs.out.root, 'out')  
+# part of this code and style of map reduce is taken from Jeffrey Breen (one of the contributors of rmr2 package)  
+# asa.csv.input.format() - read CSV data files and label field names 
+# for better code readability (especially in the mapper) 
+# 
+asa.csv.input.format = make.input.format(format='csv', mode='text', streaming.format = NULL, sep=',', 
+                                         col.names = c('Year', 'Month', 'DayofMonth', 'DayOfWeek', 
+                                                       'DepTime', 'CRSDepTime', 'ArrTime', 'CRSArrTime', 
+                                                       'UniqueCarrier', 'FlightNum', 'TailNum', 
+                                                       'ActualElapsedTime', 'CRSElapsedTime', 'AirTime', 
+                                                       'ArrDelay', 'DepDelay', 'Origin', 'Dest', 'Distance', 
+                                                       'TaxiIn', 'TaxiOut', 'Cancelled', 'CancellationCode', 
+                                                       'Diverted', 'CarrierDelay', 'WeatherDelay', 
+                                                       'NASDelay', 'SecurityDelay', 'LateAircraftDelay'), 
+                                         stringsAsFactors=F)  
+# 
+# the mapper gets keys and values from the input formatter 
+# in our case, the key is NULL and the value is a data.frame from read.table() 
+# 
+mapper.year.market.enroute_time = function(key, val.df) { 
+   
+  # Remove header lines, cancellations, and diversions: 
+  val.df = subset(val.df, Year != 'Year' & Cancelled == 0 & Diverted == 0) 
+   
+  # We don't care about direction of travel, so construct a new 'AirlineRoute' vector 
+  # with airports ordered alphabetically (e.g, SAN to SFO becomes 'SAN-SFO') 
+  AirlineRoute = with( val.df, ifelse(Origin < Dest,  
+                                      paste(Origin, Dest, sep='-'), 
+                                      paste(Dest, Origin, sep='-')) ) 
+   
+  # key consists of year, market 
+  output.key = data.frame(year=as.numeric(val.df$Year), AirlineRoute=AirlineRoute, stringsAsFactors=F) 
+   
+  # emit data.frame of gate-to-gate elapsed times (CRS and actual) + time in air 
+  output.val = val.df[,c('CRSElapsedTime', 'ActualElapsedTime', 'AirTime')] 
+  colnames(output.val) = c('scheduled', 'actual', 'inflight') 
+   
+  # and finally, make sure they're numeric while we're at it 
+  output.val = transform(output.val,  
+                         scheduled = as.numeric(scheduled), 
+                         actual = as.numeric(actual), 
+                         inflight = as.numeric(inflight) 
+  ) 
+   
+  return( keyval(output.key, output.val) ) # {BOM-DEL, {120, 125, 100}},{BOM-BLR, {110, 115, 90}} 
+} 
+# 
+# the reducer gets all the values for a given key 
+# the values (which may be multi-valued as here) come in the form of a data.frame 
+# 
+reducer.year.market.enroute_time = function(key, val.df) { 
+  #{BOM-DEL, {120, 125, 100}} {110, 115, 90}} 
+  output.key = key  
+  output.val = data.frame(flights = nrow(val.df),  
+                          scheduled = mean(val.df$scheduled, na.rm=T),  
+                          actual = mean(val.df$actual, na.rm=T),  
+                          inflight = mean(val.df$inflight, na.rm=T) ) 
+   
+  return( keyval(output.key, output.val) ) 
+}  
+mr.year.market.enroute_time = function (input, output) { 
+  mapreduce(input = input, 
+            output = output, 
+            # output = "data/flightoutput1", 
+            input.format = asa.csv.input.format, 
+            map = mapper.year.market.enroute_time, 
+            reduce = reducer.year.market.enroute_time, 
+            verbose=T) 
+}  
+out = mr.year.market.enroute_time(hdfs.data, hdfs.out)  
+results = from.dfs( out ) 
+results.df = as.data.frame(results, stringsAsFactors=F ) 
+colnames(results.df) = c('year', 'AirlineRoute', 'flights', 'scheduled', 'actual', 'inflight')  
+# print((results.df))  
+rhive.write.table(results.df, tableName = 'RouteMeanTime', sep=',')   
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 
+   
+R Code for Decision Tree DF <- hdfs.data 
+Data <- DF[, c("UniqueCarrier", "DepDelay", "AirTime", "Distance", "ArrDelay")] 
+Data <- Data[complete.cases(Data),] 
+dim(Data) 
+filteredData <- sample(1:dim(Data)[1], size=as.integer(dim(Data[1])/3),replace = F) 
+filteredData  
+# creating trainData & testData 
+trainData <- Data[-filteredData,] 
+#View(trainData) 
+testData <- Data[filteredData,] 
+#View(testData) 
+library(tree)  
+myTree <- tree(ArrDelay ~ DepDelay + AirTime + Distance 
+               , data=trainData) # model 
+plot(myTree) 
+text(myTree , pretty = 0)  
+testData$predictedarrivaldelay <- predict(myTree, newdata = testData)  
+rhive.write.table(testData, tableName = 'predictedarrivaldelay', sep=',')  
+ 
+rhive.query("show tables")  
+rhive.query("Select * from predictedarrivaldelay limit 10") 
+#View(testData)   
+library(hydroGOF) 
+rmse(testData$predictedarrivaldelay, testData$ArrDelay)  
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 
+PIG Code to find Delays by month and by Carrier -- First, we load the raw data from a HIVE Data warehouse using Hcatalog database.  
+FLIGHT_DATA = LOAD 'airlines.flight_data' USING org.apache.hive.hcatalog.pig.HCatLoader(); 
+DESCRIBE FLIGHT_DATA; 
+-- project, to get rid of unused fields 
+A = FOREACH FLIGHT_DATA GENERATE day AS d, day_of_week AS dow, month AS m, (int)(arr_time-crs_arr_time) AS delay; 
+-- group by month 
+B = GROUP A BY (m,dow);  
+DelayByMonth = FOREACH B { 
+ C = FILTER A BY (delay >= 15); -- only keep tuples with a delay >= than 15 minutes 
+ GENERATE group, COUNT(A) AS tot, COUNT(C) AS del, (float) COUNT(C)/COUNT(A) AS frac; 
+} 
+--Store the results back into HIVE data warehouse  
+STORE DelayByMonth INTO 'airlines.DelayByMonth' USING org.apache.hcatalog.pig.HCatStorer();  
+-- project, to get rid of unused fields 
+A = FOREACH FLIGHT_DATA GENERATE month AS m, unique_carrier AS carrier, (int)(arr_time-crs_arr_time) AS delay;  
+-- group by carrier 
+B = GROUP A BY carrier;  
+DelayByCarrie = FOREACH B { 
+ C = FILTER A BY (delay >= 15); -- only keep tuples with a delay >= than 15 minutes 
+ GENERATE group, COUNT(A) AS tot, COUNT(C) AS del, (float) COUNT(C)/COUNT(A) AS frac; 
+} 
+--Store the results back into HIVE data warehouse   
+STORE DelayByCarrie INTO 'airlines.DelayByCarrie' USING org.apache.hcatalog.pig.HCatStorer(); 
