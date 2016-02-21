@@ -1,0 +1,159 @@
+HIVE CODE /* flight_hive_database.SQL for HIVE Database */ 
+
+/* Create a database called FlightData             */ 
+
+CREATE DATABASE Airlines; 
+USE Airlines; 
+
+/*Create tables for the FlightData database         */ 
+
+CREATE TABLE flight_data( 
+   year INT, 
+   month  INT, 
+   day_of_month  INT, 
+   day_of_week  INT, 
+   dep_time  INT, 
+   crs_dep_time  INT, 
+   arr_time  INT, 
+   crs_arr_time  INT, 
+   unique_carrier  VARCHAR(10), 
+   flight_num   INT, 
+   tail_num  VARCHAR(40), 
+   actual_elapsed_time  INT, 
+   crs_elapsed_time  INT, 
+   air_time INT, 
+   arr_delay  INT, 
+   dep_delay INT, 
+   origin  VARCHAR(10), 
+   dest  VARCHAR(10), 
+   distance  INT, 
+   taxi_in  INT, 
+   taxi_out  INT, 
+   cancelled  INT, 
+   cancellation_code  VARCHAR(10), 
+   diverted   INT, 
+   carrier_delay   VARCHAR(10), 
+   weather_delay  VARCHAR(10), 
+   nas_delay  VARCHAR(10), 
+   security_delay  VARCHAR(10), 
+   late_aircraft_delay VARCHAR(10) 
+) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/flight_data/part-r-00000' into table flight_data; 
+Create table Airline_Routes 
+(Airline  VARCHAR(4), 
+Airline_ID  VARCHAR(4), 
+Source_airport  VARCHAR(4), 
+Source_airport_ID  VARCHAR(4), 
+Destination_airport  VARCHAR(4),   
+Destination_airport_ID VARCHAR(4), 
+Codeshare  VARCHAR(4),   
+Stops  int, 
+Equipment  VARCHAR(4)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airline_routes/part-r-00000' into table Airline_Routes;  
+Create Table Airlines 
+( 
+Airline_ID  VARCHAR(4), 
+Name  VARCHAR(50), 
+Alias  VARCHAR(4), 
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Callsign VARCHAR(50),  
+Country VARCHAR(50),   
+Active  VARCHAR(2)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airlines/part-r-00000' into table Airlines;  
+Create table Airports 
+(Airport_ID  VARCHAR(4),   
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50),   
+IATA  VARCHAR(4),   
+ICAO  VARCHAR(4),   
+Latitude  float, 
+Longitude  float,  
+Altitude  int,  
+Timezone  float,  
+DST  VARCHAR(4),  
+Tz VARCHAR(50)) 
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;  
+LOAD DATA INPATH '/data/airports/part-r-00000' into table Airports; 
+   
+  /* ++++++++++++++++Table to store MapReduce Results++++++++++++++++    */  
+CREATE EXTERNAL TABLE Active_Airlines_US(  
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50),  
+Number_Routes_covered int 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/activeAirlinesFinder_ids/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/activeAirlinesFinder_id/part-r-00000' into table Active_Airlines_US;  
+select * from Active_Airlines_US;  
+CREATE EXTERNAL TABLE ActiveWithShareCode( 
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/airlinesWithSharedCodeFinder_ids/'; 
+LOAD DATA INPATH '/user/sapna/airlineApp/airlinesWithSharedCodeFinder_ids/part-r-00000' into table ActiveWithShareCode; 
+select * from ActiveWithShareCode;  
+CREATE EXTERNAL TABLE ZeroStopAirlines( 
+Airline_ID Int, 
+Airline_IATA VARCHAR(4), 
+Name     VARCHAR(50),  
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','LOCATION '/user/sapna/airlineApp/zeroStopAirlinesFinder_iddd/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/zeroStopAirlinesFinder_iddd/part-r-00000' into table ZeroStopAirlines; 
+select * from ZeroStopAirlines;  
+CREATE EXTERNAL TABLE AirPortByCountry( 
+Airport_ID_ITATA VARCHAR(50), 
+Name     VARCHAR(50),  
+City     VARCHAR(50), 
+Country  VARCHAR(50) 
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/sapna/airlineApp/findAirportByCountry_ids/';  
+LOAD DATA INPATH '/user/sapna/airlineApp/findAirportByCountry_ids//part-r-00000' into table AirPortByCountry;  
+select * from AirPortByCountry;  
+
+/* ++++++++++++++++++++++++++++Create Table to Store PIG Results +++++++++++++++++*/  
+Drop Table delaybymonth; 
+CREATE EXTERNAL TABLE delaybymonth( 
+monthday varchar(20),  
+totalflights int , 
+totaldelayedflights int , 
+percdelayed float  
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' 
+LOCATION '/data/DelayByMonthDay/';  
+LOAD DATA INPATH '/data/DelayByMonthDay/part-r-00000' into table delaybymonth; 
+select * from delaybymonth; 
+Drop Table delaybycarrier;  
+CREATE EXTERNAL TABLE delaybycarrier( 
+monthday varchar(20),  
+totalflights int , 
+totaldelayedflights int , 
+percdelayed float  
+) 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' 
+LOCATION '/data/DelayByCarrie/';  
+LOAD DATA INPATH '/data/DelayByCarrie/part-r-00000' into table delaybycarrier; 
+select * from DelayByCarrier; 
