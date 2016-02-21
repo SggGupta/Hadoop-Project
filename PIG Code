@@ -1,0 +1,29 @@
+-- PIG Code to find Delays by month and by Carrier 
+-- First, we load the raw data from a HIVE Data warehouse using Hcatalog database.
+
+FLIGHT_DATA = LOAD 'airlines.flight_data' USING org.apache.hive.hcatalog.pig.HCatLoader(); 
+DESCRIBE FLIGHT_DATA; 
+
+-- project, to get rid of unused fields 
+A = FOREACH FLIGHT_DATA GENERATE day AS d, day_of_week AS dow, month AS m, (int)(arr_time-crs_arr_time) AS delay; 
+-- group by month 
+B = GROUP A BY (m,dow);  
+DelayByMonth = FOREACH B { 
+ C = FILTER A BY (delay >= 15); -- only keep tuples with a delay >= than 15 minutes 
+ GENERATE group, COUNT(A) AS tot, COUNT(C) AS del, (float) COUNT(C)/COUNT(A) AS frac; 
+} 
+
+--Store the results back into HIVE data warehouse  
+STORE DelayByMonth INTO 'airlines.DelayByMonth' USING org.apache.hcatalog.pig.HCatStorer();  
+
+-- project, to get rid of unused fields 
+A = FOREACH FLIGHT_DATA GENERATE month AS m, unique_carrier AS carrier, (int)(arr_time-crs_arr_time) AS delay;  
+-- group by carrier 
+B = GROUP A BY carrier;  
+DelayByCarrie = FOREACH B { 
+ C = FILTER A BY (delay >= 15); -- only keep tuples with a delay >= than 15 minutes 
+ GENERATE group, COUNT(A) AS tot, COUNT(C) AS del, (float) COUNT(C)/COUNT(A) AS frac; 
+} 
+
+--Store the results back into HIVE data warehouse   
+STORE DelayByCarrie INTO 'airlines.DelayByCarrie' USING org.apache.hcatalog.pig.HCatStorer(); 
