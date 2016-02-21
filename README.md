@@ -1,1 +1,1 @@
-# Hadoop-Project
+Flight and Airline Dataset is acquired from stat-computing.org web site and initially stored in Mysql database for exploratory analysis. After explorative analysis data is moved into HDFS using Sqoop for further processing. MapReduce, Rhadoop and PIG jobs are used to process data in HDFS to answer some ad-hoc business queries. R programming is used to create predictive model. All the results are stored in HIVE database. Data is pulled from HIVE Data warehouse into Tableau Dashboard using MapR ODBC driver.
